@@ -1,76 +1,63 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <string.h>
+#include "header.h"
 
-#define MAX_INPUT_SIZE 1024
-#define MAX_TOKEN_SIZE 64
-#define MAX_NUM_TOKENS 64
-void parse_input(char* input, char** tokens)
+/**
+ * check_cmd - Excutes commands found in predefined path
+ * @cmd: Array of parsed command strings
+ * @input: Input recieved from user (to be freed)
+ * @c:Shell Excution Time Case of Command Not Found
+ * @argv: Arguments before program starts(argv[0] == Shell Program Name)
+ * Return: 1 Case Command Null -1 Wrong Command 0 Command Excuted
+ */
+int check_cmd(char **cmd, char *input, int c, char **argv)
 {
-	char* token;
-       	int token_count = 0; 
-	
-	/* Use strtok to split the input string into tokens*/
-	token = strtok(input, " \n"); 
-	while (token != NULL)
-       	{
-	       	tokens[token_count] = token; 
-		token_count++;
-		token = strtok(NULL, " \n"); 
+	int wstatus;
+	pid_t pid;
+
+	if (*cmd == NULL)
+		return (EXIT_FAILURE);
+	pid = fork();
+	if (pid == -1)
+	{
+		perror("Error");
+		return (-1);
 	}
-       
-	tokens[token_count] = NULL; // Set the last token as NULL 
+	if (pid == 0)
+	{
+		if (_strncmp(*cmd, "./", 2) != 0 && _strncmp(*cmd, "/", 1) != 0)
+			path_cmd(cmd);
+		if (access(cmd[0], R_OK) != 0)
+		{
+			print_error(cmd[0], c, argv);
+			free_all(cmd, input);
+			exit(127);
+		}
+		if (execve(*cmd, cmd, environ) == -1)
+			return (2);
+		else
+			return (0);
+	}
+	wait(&wstatus);
+	if (WIFEXITED(wstatus))
+	{
+		if (WEXITSTATUS(wstatus) == 0)
+			return (0);
+		else if (WEXITSTATUS(wstatus) == 2)
+			return (2);
+		else if (WEXITSTATUS(wstatus) == 127)
+			return (127);
+	}
+	return (127);
 }
 
-int main() 
-{ 
-	char input[MAX_INPUT_SIZE];
-       	char* tokens[MAX_NUM_TOKENS];
-       	while (1)
-       	{ 
-		printf("$ ");
-		/* Prompt the user for a command*/
-	       	fflush(stdout);
-	       
-		/* Read the input from the user*/
-	       fgets(input, MAX_INPUT_SIZE, stdin);
-	      
-	       /* Parse the input into tokens*/
-	       parse_input(input, tokens);
-	       /* Fork a child process to execute the command*/
-	       pid_t pid = fork();
-	       if (pid < 0)
-	       { 
-		       printf("Fork failed!\n");
-		       return 1;
-	       }
-	       if (pid == 0)
-	       {
-		       /* Child process*/
-		       execvp(tokens[0], tokens);
-		       printf("Command not found.\n");
-		       return 0;
-	       }
-	       else
-	       {
-		       /* Parent process*/
-		       wait(NULL);
-	       }
-	}
-
-/*Print Environment variables*/
-
-void main(int argc, char *argv[], char * envp[])
+/**
+ * signal_to_handle - Configures ^C not to terminate our shell
+ * @sig: Incoming Signal
+ */
+void signal_to_handle(int sig)
 {
-    int i;
+	if (sig == SIGINT)
+	{
+		PRINT("\n$ ");
+	}
+}
 
-    for (i = 0; envp[i] != NULL; i++)
-    {
-        printf("\n%s", envp[i]);
-    }
-}
-	return 0;
-}
