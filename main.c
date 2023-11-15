@@ -1,76 +1,51 @@
-#include "main.h"
+#include "header.h"
 
 /**
- * main - Getline function
+ * main - Entry point to program
  * @argc: Argument count
- * @argv: Array of argument value
- * Return: 0 on success
+ * @argv: Argument vector
+ * Return: Returns condition
  */
-
-int main(int argc, char **argv)
+int main(__attribute__((unused)) int argc, char **argv)
 {
-	(void)argc, (void)argv;
-	char *buf = NULL, *token;
-	size_t count = 0;
-	ssize_t nread;
-	pid_t child_pid;
-	int i, status;
-	char **array;
+	char *input, **cmd, **commands;
+	int count = 0, i, condition = 1, stat = 0;
 
-	while (1)
+	if (argv[1] != NULL)
+		read_file(argv[1], argv);
+	signal(SIGINT, signal_to_handle);
+	while (condition)
 	{
-		write(STDOUT_FILENO, "shs$ ", 9);
-
-		nread = getline(&buf, &count, stdin);
-
-		if (nread ==  -1)
+		count++;
+		if (isatty(STDIN_FILENO))
+			prompt();
+		input = _getline();
+		if (input[0] == '\0')
+			continue;
+		history(input);
+		commands = separator(input);
+		for (i = 0; commands[i] != NULL; i++)
 		{
-			perror("Exiting shell");
-			exit(1);
-		}
-
-		token = strtok(buf, " \n");
-
-		array = malloc(sizeof(char*) * 1024);
-		i = 0;
-
-		while (token)
-		{
-			array[i] = token;
-			token = strtok(NULL, "\n");
-			i++;
-
-		}
-
-		array[i] = NULL;
-
-		child_pid = fork();
-
-		if (child_pid == -1)
-		{
-			perror("Failed to create.");
-			exit (41);
-
-		}
-
-		if (child_pid == 0)
-		{
-			if (execve(array[0], array, NULL) == -1)
+			cmd = parse_cmd(commands[i]);
+			if (_strcmp(cmd[0], "exit") == 0)
 			{
-				perror("Failed to execute");
-				exit(97);
-
+				free(commands);
+				exit_bul(cmd, input, argv, count, stat);
 			}
-			
+			else if (check_builtin(cmd) == 0)
+			{
+				stat = handle_builtin(cmd, stat);
+				free(cmd);
+				continue;
+			}
+			else
+				stat = check_cmd(cmd, input, count, argv);
+			free(cmd);
 		}
-		else
-		{
-			wait(&status);
-
-		}
-
+		free(input);
+		free(commands);
+		wait(&stat);
 	}
-	free(buf);
-	return (0);
-
+	return (stat);
 }
+
