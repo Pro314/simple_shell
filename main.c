@@ -1,51 +1,44 @@
-#include "header.h"
+#include "shell.h"
 
 /**
- * main - Entry point to program
- * @argc: Argument count
- * @argv: Argument vector
- * Return: Returns condition
+ * main - entry point
+ * @ac: arg count
+ * @av: arg vector
+ *
+ * Return: 0 on success, 1 on error
  */
-int main(__attribute__((unused)) int argc, char **argv)
+int main(int ac, char **av)
 {
-	char *input, **cmd, **commands;
-	int count = 0, i, condition = 1, stat = 0;
+	info_t info[] = { INFO_INIT };
+	int fd = 2;
 
-	if (argv[1] != NULL)
-		read_file(argv[1], argv);
-	signal(SIGINT, signal_to_handle);
-	while (condition)
+	asm ("mov %1, %0\n\t"
+		"add $3, %0"
+		: "=r" (fd)
+		: "r" (fd));
+
+	if (ac == 2)
 	{
-		count++;
-		if (isatty(STDIN_FILENO))
-			prompt();
-		input = _getline();
-		if (input[0] == '\0')
-			continue;
-		history(input);
-		commands = separator(input);
-		for (i = 0; commands[i] != NULL; i++)
+		fd = open(av[1], O_RDONLY);
+		if (fd == -1)
 		{
-			cmd = parse_cmd(commands[i]);
-			if (_strcmp(cmd[0], "exit") == 0)
+			if (errno == EACCES)
+				exit(126);
+			if (errno == ENOENT)
 			{
-				free(commands);
-				exit_bul(cmd, input, argv, count, stat);
+				_eputs(av[0]);
+				_eputs(": 0: Can't open ");
+				_eputs(av[1]);
+				_eputchar('\n');
+				_eputchar(BUF_FLUSH);
+				exit(127);
 			}
-			else if (check_builtin(cmd) == 0)
-			{
-				stat = handle_builtin(cmd, stat);
-				free(cmd);
-				continue;
-			}
-			else
-				stat = check_cmd(cmd, input, count, argv);
-			free(cmd);
+			return (EXIT_FAILURE);
 		}
-		free(input);
-		free(commands);
-		wait(&stat);
+		info->readfd = fd;
 	}
-	return (stat);
+	populate_env_list(info);
+	read_history(info);
+	hsh(info, av);
+	return (EXIT_SUCCESS);
 }
-
